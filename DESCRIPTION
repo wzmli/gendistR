@@ -1,0 +1,21 @@
+Package: gendistR
+Title: Calculate Genetic Distance Metrics
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Nathan K", "Smith", , "smith@dal.ca", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-8577-3023"))
+           )
+Description: gendistR uses amino acid substitution metadata for SARS-CoV-2 sequences to produce a variety of genetic distance metrics.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+Imports: 
+    dplyr,
+    magrittr,
+    purrr,
+    rlang,
+    stringr,
+    tibble,
+    tidyr,
+    VennDiagram

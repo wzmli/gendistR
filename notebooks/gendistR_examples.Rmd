@@ -1,0 +1,250 @@
+---
+title: "gendistR Package"
+author: "Nathan K Smith"
+date: "`r format(Sys.Date(),'%B %d, %Y')`"
+output:
+  html_document:
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+    df_print: paged
+    highlight: monochrome
+---
+
+This notebook illustrates the genetic distance functions included in the gendistR package.
+
+***These functions are being actively developed. Only `gendist_avg()` and `gendist_parse()` are currently up to date and included in the package.***
+
+The gendistR package uses amino acid substitutions (relative to wildtype) to determine the genetic distance of two groups of sequences: a test group ($T$), and a focal group ($F$). The focal group is the group of interest, while the test group is the comparison group. For example, focal could be a new emerging lineage, while test could be all circulating lineages during the emergence of the new lineage of interest (focal).
+
+gendistR uses the amino acid substitutons of these groups to produce a variety of genetic distance-based metrics. Variations of the following three base metrics are produced:
+
+- **Jaccard Distance** ($J_{ij}$): a summary measure of distance that does not distinguish the distance of test vs focal. A proportional measure - relative to the total number of aaSubs across test and focal. For the $i$th sequence in the focal and the $j$th sequence in test, the Jaccard distance is defined as one minus the intersection divided by union: $$ J_{ij} = 1 - \frac{(F_i \cap T_j)}{(F_i \cup T_j)} $$
+
+- **Raw Genetic Distance** ($D_{ij}$): the actual number of amino acid substitutions that are unique to focal (test). Specific to either test or focal. An absolute measure - retains magnitude of distance. For the $i$th sequence in the focal and the $j$th sequence in test, the raw genetic distance of the focal sequence is defined as $$ D_{ij(F)} = F_i - (F_i \cap T_j) $$
+Similarly, the raw genetic distance of the test sequence is defined as: $$ D_{ij(T)} = T_j - (F_i \cap T_j) $$ 
+
+- **Proportional Genetic Distance** ($\hat{D}_{ij}$): the proportion of total amino acid substitutions that are unique to focal (test). Specific to either test or focal. A proportional measure - relative to the total number of aaSubs in focal (test). For the $i$th sequence in the focal and the $j$th sequence in test, the raw genetic distance of the focal sequence is defined as:
+$$ \hat{D}_{ij(F)} = 1 - \frac{(F_i \cap T_j)}{F_i} $$ Similarly, the raw genetic distance of the test sequence is defined as $$ \hat{D}_{ij(T)} = 1 - \frac{(F_i \cap T_j)}{T_j} $$
+
+Variations of these three measures include the mean (per sequence), overall (unique), weighted, and unweighted.
+
+
+```{r, setup, echo=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE, 
+  comment = "", 
+  echo = FALSE,
+  message = FALSE
+)
+```
+
+```{r, libraries, include=FALSE}
+# libraries
+listlibraries <- c(
+  "tidyverse", "DT", "ggVennDiagram", "ggplot2", "data.table"
+)
+invisible(lapply(listlibraries, library, character.only = TRUE))
+```
+
+```{r, Load-Data}
+# load data
+load("../data/ref_consensus.RData")
+# load functions
+source("../scripts/gendist_functions_test.R")
+source("../scripts/catHeader.R")
+```
+
+```{r}
+# prepare data
+data <- refs %>% 
+  filter(clade %in% c("21A", "21K"))
+
+ref <- refs %>% 
+  filter(clade %in% c("21L"))
+
+data2 <-  refs %>% # for parse
+  filter(clade %in% c("21A", "21K", "21L"))
+
+data3 <- refs %>% # for parse 2
+  filter(clade %in% c("21A", "20I", "20J"))
+
+data4 <- refs %>% # for parse 2
+  filter(clade %in% c("21K", "21A", "20I", "20J"))
+
+avg_dist_per_seq2 <- gendist_avg(data3, ref)
+parsed_per_seq2 <- gendist_parse(data4, ref)
+```
+
+```{r}
+# run functions
+avg_dist_per_seq <- gendist_avg(data, ref)
+parsed_per_seq <- gendist_parse(data2, ref)
+overall_dist <- gendist_all(data, ref, "21L")
+parsed_all <- gendist_parse_all(data, ref, "21L")
+```
+
+# Parsed subs per lineage
+
+This parse was done by the `gendist_parse()` function, and shows the three seqeunces used in the first example: a single BA.1, BA.2, and Delta (these are consensus sequences taken from <https://github.com/corneliusroemer/pango-sequences/tree/main> on May 17th 2024.). The results include a parse for each sequence, and a parse of the unique to test, and unique to focal. In this case, BA.2 is the focal, so this line shows so unique aasubs.  
+```{r}
+parsed_per_seq %>% 
+datatable(parsed_per_seq, caption = "Table 1. Parsed aasubs per Sequence (n = 3)")
+```
+
+# Average Distance per Lineage
+
+Section illustrates the functionality and describes the output of the `gendist_avg()` function.
+
+The focal lineage is BA.2, and the test set consists of one Delta sequence, and one BA.1 sequence (see Table 1 above). 
+
+## Result Table
+```{r}
+avg_dist_per_seq %>% 
+  mutate_if(is.numeric, round, digits = 2) %>% 
+  datatable(caption = "Table 2. Average Genetic Distance (per Lineage) From BA.2 (n = 2)")
+```
+
+## Venn Diagram
+Venn Diagram of total amino acid substitutions
+```{r}
+results <- gendist_avg(data, ref, plot = TRUE)
+#grid.draw(results$plot)
+```
+
+## Variable Descriptions
+
+**testdf_mean**: Mean raw genetic distance of the test dataset from wildtype, defined as the average number of aa substitutions per sequence in the test dataset relative to wildtype. This is calculated by determining the number of aaSubs per genome segment for each sequence in the test dataset, summing them, then dividing by the total number of sequences in the test dataset.
+
+Illustration using the M segment in Table 1: 1 sub for Delta (top row), and 3 subs for BA.1 (second row). 1+3/2 = 2. This means that each sequence in the test dataset has two aasubs in the M segment on average. This is equivalent to testdf (red) in the Venn diagram.
+
+The number of aasubstitutions in sequence j of the test dataset can be represented by $T_j$. The mean of $T_j$ is $$\overline{T} = \frac{1}{n} \sum_{i=1}^{n} T_j$$
+
+
+**testdf_sd**: Standard deviation corresponding the above testdf_mean.
+
+
+**testdf_rawdist_mean**: Mean raw genetic distance of the test dataset (relative to focal), defined as the average number of unique aa substitutions per sequence in the test dataset (i.e., not shared by the focal lineage, BA.2). This is calculated by removing any subs found in the focal from each sequence, summing the remaining subs, and dividing by the total number of sequences in the test dataset. 
+
+Illustration using the M segment in Table 1: Delta (top row) has one aasub not found in BA.2, and BA.1 has also has one aasub not found in BA.2. 1+1/2 = 1. This mean that each sequence in the test dataset has one unique sub in the M segment on average (not found in focal). Equivalent to testdf-intersection.  
+
+Mean raw distance for test dataset:
+$$\overline{D}_{(T)} = \frac{1}{n} \sum_{i=1}^{n} D_{ij(T)}$$
+
+
+**testdf_rawdist_sd**: Standard deviation corresponding the above testdf_rawdist_mean
+
+
+**testdf_focal_shared**: Mean intersection of test and focal: the average number of aa substitutions shared between each sequence in the test dataset and the focal lineage. Calculated by subtracting testdf_rawdist_mean from testdf_mean.
+
+For example, the M segment has a testdf_mean of 2 and a testdf_rawdist_mean of 1: 2-1=1. Equivalent to the intersection in the venn diagram (overlapping blue and red). 
+
+The intersection of the ith sequence in focal and the jth sequence in test can be represented as $(F_i \cap T_j)$. The mean intersection for F and T is $$\overline{F \cap T} = \frac{1}{n} \sum_{i=1}^{n} (F_i \cap T_j)$$
+
+
+**focal_rawdist_mean**: Mean raw genetic distance of the focal dataset, defined as the average number of aa subs per sequence in the test dataset that are unique to the focal lineage (i.e., when comparing each sequence in the test dataset to the focal, how many unique aasubs does the focal have?). Calculated by removing each individual test datatset sequence aasubs from the focal aasubs, summing them, then dividing by the total number of sequences in the test dataset.
+
+Illustration using the M segment in Table 1: Delta has neither of the two subs that BA.2 has, and BA.1 has both. So the calculation is 2+0/2 = 1. This means that the focal has an average of one unique substitution in the M segment compared to each sequence in the test dataset. Equivalent to focal_mean - intersection.  
+
+Mean raw distance for focal dataset:
+$$\overline{D}_{(F)} = \frac{1}{n} \sum_{i=1}^{n} D_{ij(F)}$$
+
+
+**focal_rawdist_sd**: standard deviation of the above focal_rawdist_mean.
+
+
+**focal_mean**: Mean raw genetic distance of focal from wildtype, defined as the average number of aasubs in the focal set relative to wildtype.  
+
+The number of aasubstitutions in sequence i of the focal dataset can be represented by 
+$F_i$. The mean of $F_i$ is 
+$$\overline{F} = \frac{1}{n} \sum_{i=1}^{n} F_i$$
+
+
+**focal_sd**: standard deviation of focal_mean. If only using one focal lineage, this will be NA.
+
+
+**Mean Jaccard Distance**: Jaccard Distance, defined as the intersection/union (i.e., testdf_focal_shared/(testdf_mean+focal_mean)).  The mean jaccard can be interpreted as the mean proportion of total aasubs (across both test and focal) that are unique to one (i.e., not shared). The Jaccard does not differentiate the contribution of focal or test to the total distance. This is an overall measure, proportional measure of distance. The mean Jaccard Distance between the test and focal datasets can be represented as
+
+$$\overline{J} = \frac{1}{n} \sum_{i=1}^{n} J_{ij}$$
+
+
+**focal_propdist_mean**: Mean proportional genetic distance of the focal dataset, defined as focal_rawdist_mean / focal_mean. This is a proportion version of focal_rawdist_mean that is more comparable to jaccard, but focused on focal. 
+
+
+**testdf_propdist_mean**: Mean proportional genetic distance of the test dataset, defined as testdf_rawdist_mean / testdf_mean. This is a proportion version of testdf_rawdist_mean that is more comparable to jaccard, but focused on testdf.
+
+
+# Overall Distance
+
+This tests the `gendist_all()` function. 
+
+Overall distance of test set (BA.1 and Delta test set vs BA.2 focal)
+
+This looks at the total number of non-duplicate aasubs in the test dataset.
+
+1. testdf_rel_wt: Number of non-duplicate aa substitutions relative to wildtype, among all sequences in the test dataset. Confirming in Table 1: Delta has 1 aasub in the M gene, while BA.1 has 3. None of them are shared (i.e., duplicates). 1+3=4. Meaning there are 4 total non-duplicate aasubs in the m-gene across all sequences in the test dataset.
+2. testdf_unique: Number of unique non-duplicate aa substitutions among all sequences in the test dataset (i.e., not shared by focal). Checking in Table 1: of the four non-duplicate aa subs in the m segment between Delta and BA.1, BA.2 has 2 of them: 4-2 = 2. Meaning that there are two unique non-duplicate aasubs in the m segment across the test dataset. 
+3. testdf_focal_shared: Number of shared aa substitutions between focal and circulating lineages in test dataset (testdf_rel_wt - testdf_unique): 4-2 = 2.
+4. focal_unique: Number of aa substitutions unique to focal (i.e., not found in any circulating lineages in test dataset) (focal_rel_wt - testdf_focal_shared): 2-2=0.
+5. focal_rel_wt: Number of aa substitutions in focal relative to wildtype.
+
+```{r}
+datatable(overall_dist, caption = "Table 3. Genetic Distance From BA.2 (n = 2)")
+```
+
+## Venn Diagrams {.tabset}
+```{r, results='asis'}
+venn_diagrams <- venn_dist(data, ref, "21L")
+
+names <- c("E", "M", "N", "ORF1a", "ORF1b", "ORF3a", "ORF6", "ORF7a", "ORF7b", "ORF8", "ORF9b", "S", "Overall")
+
+pl_list <- list()
+for (i in seq_along(names)) { # create a list of lists, where each element is a list of two items: a plot and a title
+  pl_list[[i]] <- list(venn_diagrams[[i]], names[i])
+}
+
+for (i in seq_along(names)) { # print each plot with a tabset header
+  tmp <- pl_list[[i]]
+  catHeader(tmp[[2]], 3) # this uses the second item in tmp as the title, and uses the third header level
+  lapply(tmp[1], print) # this prints the first item in tmp
+}
+```
+
+## Parsed subs overall
+```{r}
+datatable(parsed_all, caption = "Table 4. Overall Parsed aasubs (n = 2)")
+```
+
+# Parsed subs per lineage - Example 2
+```{r}
+parsed_per_seq2 %>% 
+datatable(caption = "Table 5. Parsed aasubs per Sequence (n = 3)")
+```
+
+# Average Distance per Lineage - Example 2
+
+The focal lineage is BA.1, and the test set consists of one Alpha sequence, one Gamma sequence, and one Delta sequence.
+```{r}
+avg_dist_per_seq2 %>% 
+  mutate_if(is.numeric, round, digits = 2) %>% 
+  datatable(caption = "Table 6. Average Genetic Distance (per Lineage) From BA.1 (n = 3)")
+```
+
+
+Weighted option (weight by pango lineage):
+$$\overset{*}{D} = \sum_{i=1}^{R} q_i$$
+
+Where R is the number of unique pango lineages, and $q_i$ is equal to
+
+$$q_i=p_i \cdot \overline{D}_i$$
+
+Where, $p_i$ is the proportion of total sequences corresponding to the ith unique pango lineage, and $\overline{D}_i$ is the average distance for the ith unique pango lineage, equal to 
+
+$$\overline{D}_i= \frac{1}{n}\sum_{j=1}^{n_i} D_i$$
+
+Where $n_i$ is the total number of sequences in the ith pango lineage
+
+
+$$ \text{Distance}_{ij(F)} = \text{Focal}_i - (\text{Focal}_i \cap \text{Test}_j) $$
+
+Where $E$ is the number of amino acid substitutions in the emerging lineage compared to wildtype, and $(E \cap X_i)$ is the number of amino acid substitutions shared by the emerging lineage and the $i\text{th}$ sequence in the fitting window. Then we simply take the mean of all $D_i$ in the fitting window to get the average genetic distance, $\overline{D}$.
